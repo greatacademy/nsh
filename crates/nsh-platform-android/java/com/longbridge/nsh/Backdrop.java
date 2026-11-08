@@ -111,8 +111,13 @@ final class Backdrop implements ViewTreeObserver.OnPreDrawListener, View.OnAttac
         }
     }
 
-    /** Draws the blurred backdrop (the caller clips to the view's shape). */
+    /**
+     * Draws the blurred backdrop (the caller clips to the view's shape). The
+     * node is drawn even before its first recording: the view may draw only
+     * once, and each recording shows through the node it drew, without the
+     * view drawing again.
+     */
     void draw(Canvas canvas) {
-        if (canvas.isHardwareAccelerated() && node.hasDisplayList()) canvas.drawRenderNode(node);
+        if (canvas.isHardwareAccelerated()) canvas.drawRenderNode(node);
     }
 }
