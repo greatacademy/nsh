@@ -1322,8 +1322,9 @@ fn info_plist(
     Ok(d)
 }
 
-/// The deployment target the runtime is built for (`cargo xtask dist`).
-const MINIMUM_OS: &str = "15.0";
+/// The deployment target the runtime is built for (`cargo xtask dist`, and
+/// an app's own iOS hosts: [`crate::rust_app`]).
+pub(crate) const MINIMUM_OS: &str = "15.0";
 
 /// Compiles `icon` into the app's asset catalog (`Assets.car`) with
 /// `actool`, returning the Info.plist keys it produces.

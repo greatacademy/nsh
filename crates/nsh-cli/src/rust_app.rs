@@ -2011,6 +2011,7 @@ opt-level = \"s\"
             if triple == "wasm32-unknown-unknown" {
                 crate::runtime::web_build_flags(&mut cmd);
             }
+            ios_deployment_target(&mut cmd, triple, env::var_os("IPHONEOS_DEPLOYMENT_TARGET"));
         }
         if let Some(profile) = profile {
             cmd.args(["--profile", profile]);
@@ -2626,6 +2627,17 @@ pub(crate) fn cargo_target_directory(workspace: &Path) -> Option<PathBuf> {
     json.get("target_directory")?.as_str().map(PathBuf::from)
 }
 
+/// Builds for `triple`, an iOS one, at nsh's deployment target unless the
+/// environment names one (`set`). nsh's `.cargo/config.toml` sets it for its
+/// own builds; the generated workspace is built outside that checkout, where
+/// the C code of its dependencies (QuickJS, Oniguruma) would otherwise target
+/// iOS 10 and miss `___chkstk_darwin` when linked.
+fn ios_deployment_target(cmd: &mut Command, triple: &str, set: Option<std::ffi::OsString>) {
+    if triple.contains("-apple-ios") && set.is_none_or(|v| v.is_empty()) {
+        cmd.env("IPHONEOS_DEPLOYMENT_TARGET", crate::package::MINIMUM_OS);
+    }
+}
+
 fn cargo() -> std::ffi::OsString {
     env::var_os("CARGO").unwrap_or_else(|| "cargo".into())
 }
@@ -2673,6 +2685,7 @@ fn web_profile(kind: crate::runtime::WebKind) -> &'static str {
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
+    use std::process::Command;
 
     use super::{AppCrate, Nsh, RootConfig, RustApp};
 
@@ -3268,6 +3281,23 @@ mod tests {
             }
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ios_hosts_are_built_at_nsh_s_deployment_target() {
+        let target = |triple: &str, set: Option<&str>| {
+            let mut cmd = Command::new("cargo");
+            super::ios_deployment_target(&mut cmd, triple, set.map(Into::into));
+            cmd.get_envs()
+                .find(|(k, _)| *k == "IPHONEOS_DEPLOYMENT_TARGET")
+                .and_then(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
+        };
+        let minimum = Some(crate::package::MINIMUM_OS.to_owned());
+        assert_eq!(target("aarch64-apple-ios", None), minimum);
+        assert_eq!(target("aarch64-apple-ios-sim", Some("")), minimum);
+        assert_eq!(target("aarch64-apple-ios", Some("17.0")), None);
+        assert_eq!(target("aarch64-apple-darwin", None), None);
+        assert_eq!(target("aarch64-linux-android", None), None);
     }
 
     #[test]
