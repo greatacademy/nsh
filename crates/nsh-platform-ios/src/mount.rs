@@ -4263,7 +4263,16 @@ impl Mounter {
                         spinner.stopAnimating();
                     }
                     let scroll = scroll.clone();
-                    let block = block2::RcBlock::new(move || scroll.setContentInset(inset));
+                    // The content rested below the room it kept: it goes back
+                    // up with the room, as UIRefreshControl's does, rather
+                    // than staying pulled down until the next touch.
+                    let block = block2::RcBlock::new(move || {
+                        let offset = scroll.contentOffset();
+                        scroll.setContentInset(inset);
+                        if offset.y < -lead && !scroll.isDragging() {
+                            scroll.setContentOffset(CGPoint::new(offset.x, -lead));
+                        }
+                    });
                     UIView::animateWithDuration_animations(0.25, &block, mtm);
                 }
             }
