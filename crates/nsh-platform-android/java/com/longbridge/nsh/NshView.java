@@ -181,6 +181,7 @@ public class NshView extends FrameLayout {
      */
     NshView(Context context, boolean trace, File dataDir, File cacheDir) {
         super(context);
+        Permissions.attach(context);
         density = getResources().getDisplayMetrics().density;
         TextLayouts.cacheDir = context.getCacheDir();
         mounter = new Mounter(this, new Images(this::readAsset));

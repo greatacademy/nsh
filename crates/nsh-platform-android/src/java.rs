@@ -32,6 +32,9 @@ pub(crate) struct Java {
     pub(crate) net_finish: JStaticMethodID,
     pub(crate) net_pause: JStaticMethodID,
     pub(crate) net_cancel: JStaticMethodID,
+    /// `com.longbridge.nsh.Permissions`: runtime permissions and the
+    /// application's context for an app's own crate (any thread).
+    pub(crate) permissions: GlobalRef,
     /// `com.longbridge.nsh.NshView` instance methods.
     pub(crate) view_submit: JMethodID,
     pub(crate) view_report_error: JMethodID,
@@ -71,6 +74,7 @@ pub(crate) fn init(vm: JavaVM) -> jni::errors::Result<()> {
     let text = class(&mut env, "com/longbridge/nsh/TextLayouts")?;
     let net = class(&mut env, "com/longbridge/nsh/Net")?;
     let view = class(&mut env, "com/longbridge/nsh/NshView")?;
+    let permissions = class(&mut env, "com/longbridge/nsh/Permissions")?;
     let text_class: &JClass<'_> = text.as_obj().into();
     let net_class: &JClass<'_> = net.as_obj().into();
     let view_class: &JClass<'_> = view.as_obj().into();
@@ -151,6 +155,7 @@ pub(crate) fn init(vm: JavaVM) -> jni::errors::Result<()> {
         test_agent: class(&mut env, "com/longbridge/nsh/TestAgent")?,
         text,
         net,
+        permissions,
         vm,
     };
     let _ = JAVA.set(java);
