@@ -178,6 +178,10 @@ pub(crate) struct Apk<'a> {
     pub(crate) dev: bool,
     /// The app may show notifications: `POST_NOTIFICATIONS` is declared.
     pub(crate) notifications: bool,
+    /// The app may use the microphone (it is granted `speech`):
+    /// `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS` are declared, for the
+    /// audio an app's own crate captures.
+    pub(crate) microphone: bool,
     /// URL schemes that open the app (nsh.json `schemes`): one
     /// `VIEW` intent filter.
     pub(crate) schemes: &'a [String],
@@ -338,11 +342,15 @@ fn manifest_xml(apk: &Apk<'_>) -> String {
         .replace('&', "&amp;")
         .replace('"', "&quot;")
         .replace('<', "&lt;");
-    let post_notifications = if apk.notifications {
-        "\n    <uses-permission android:name=\"android.permission.POST_NOTIFICATIONS\" />"
-    } else {
-        ""
-    };
+    let mut permissions = String::new();
+    if apk.notifications {
+        permissions.push_str("\n    <uses-permission android:name=\"android.permission.POST_NOTIFICATIONS\" />");
+    }
+    if apk.microphone {
+        permissions.push_str(
+            "\n    <uses-permission android:name=\"android.permission.RECORD_AUDIO\" />\n    <uses-permission android:name=\"android.permission.MODIFY_AUDIO_SETTINGS\" />",
+        );
+    }
     // A link opens the running app (`onNewIntent`), not another activity in
     // the caller's task.
     let launch_mode = if apk.schemes.is_empty() {
@@ -365,7 +373,7 @@ fn manifest_xml(apk: &Apk<'_>) -> String {
     format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{package}">
-    <uses-permission android:name="android.permission.INTERNET" />{post_notifications}
+    <uses-permission android:name="android.permission.INTERNET" />{permissions}
     <application android:label="{label}"{icon}{cleartext}
         android:extractNativeLibs="false"
         android:enableOnBackInvokedCallback="true"
@@ -783,6 +791,7 @@ mod tests {
             activity: "com.longbridge.nsh.AppActivity",
             dev: false,
             notifications,
+            microphone: false,
             schemes: &[],
             rust,
             dark: false,

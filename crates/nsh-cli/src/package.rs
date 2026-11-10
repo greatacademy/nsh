@@ -864,6 +864,7 @@ fn package_android(
             activity: "com.longbridge.nsh.AppActivity",
             dev: false,
             notifications: config.notifications(),
+            microphone: config.speech(),
             schemes: &config.schemes,
             rust: built.rust_root,
             dark: config.appearance.as_deref() == Some("dark"),
