@@ -168,10 +168,12 @@ two-face = { version = "0.4.5", default-features = false, features = ["syntect-f
 jni = "0.21"
 ndk-context = "0.1.1"
 # Browser APIs from Rust on the web (`nsh-extra`'s modules), features per crate. `nsh`
-# runs the wasm-bindgen CLI of the exact version a runtime links: the pin keeps it.
+# runs the wasm-bindgen CLI of the exact version a runtime links: the pin keeps it. js-sys and
+# web-sys are released with it, each needing its own wasm-bindgen, so they are pinned with it: an
+# app whose lockfile is new would otherwise take a later one that needs a later wasm-bindgen.
 wasm-bindgen = "=0.2.129"
-js-sys = "0.3.106"
-web-sys = "0.3.106"
+js-sys = "=0.3.106"
+web-sys = "=0.3.106"
 windows-sys = "0.61"
 dunce = "1"
 semver = "1"
