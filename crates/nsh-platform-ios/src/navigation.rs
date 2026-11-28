@@ -1338,7 +1338,9 @@ define_class!(
             // UIKit's own hook for this: it runs for pushes and pops, before
             // the transition starts, with a live `transitionCoordinator` — the
             // place a `UITabBarController` moves its bar from.
-            slide_bottom_bar(nav, bottom_bar_hidden(nav));
+            // For a pop the stack can still list the screen that leaves, so
+            // the screen arriving says where the bar goes.
+            slide_bottom_bar(nav, bottom_bar_hidden_showing(nav, Some(controller)));
             // A swipe back that the user cancels ends without `didShow`, so the
             // bar has to be put back where the stack now says it belongs once
             // the interaction ends (a completed one lands on the same value).
@@ -2202,22 +2204,44 @@ fn ancestors_visible(view: &UIView) -> bool {
 /// the stack asks for it, until that screen is popped (Apple: "the bottom bar
 /// remains hidden until the view controller is popped from the stack").
 pub(crate) fn bottom_bar_hidden(nav: &UINavigationController) -> bool {
+    bottom_bar_hidden_showing(nav, None)
+}
+
+/// [`bottom_bar_hidden`] while `nav` turns to `showing`: only it and the
+/// screens below it count.
+fn bottom_bar_hidden_showing(
+    nav: &UINavigationController,
+    showing: Option<&UIViewController>,
+) -> bool {
     match crate::split::bar_role(nav) {
         // An expanded split's columns show side by side: a page of any of
         // them keeps the bar off screen, as a page of one stack does.
-        crate::split::BarRole::Shown { shown, .. } => shown.iter().any(|nav| hides_bar(nav)),
-        _ => hides_bar(nav),
+        crate::split::BarRole::Shown { shown, .. } => shown.iter().any(|column| {
+            let turning = std::ptr::eq::<UINavigationController>(&**column, nav);
+            hides_bar(column, if turning { showing } else { None })
+        }),
+        _ => hides_bar(nav, showing),
     }
 }
 
-/// Whether a screen of `nav` asks for the bar off screen.
-fn hides_bar(nav: &UINavigationController) -> bool {
+/// Whether a screen of `nav`, up to `showing` if it is one of them, asks for
+/// the bar off screen.
+fn hides_bar(nav: &UINavigationController, showing: Option<&UIViewController>) -> bool {
     let controllers = nav.viewControllers();
-    controllers.iter().any(|controller| {
-        // SAFETY: asking UIKit for the property it defines for every screen.
-        let hides: bool = unsafe { msg_send![&*controller, hidesBottomBarWhenPushed] };
-        hides
-    })
+    let hides: Vec<bool> = controllers
+        .iter()
+        .map(|controller| {
+            // SAFETY: asking UIKit for the property it defines for every screen.
+            let hides: bool = unsafe { msg_send![&*controller, hidesBottomBarWhenPushed] };
+            hides
+        })
+        .collect();
+    let shown = showing.and_then(|showing| {
+        controllers
+            .iter()
+            .position(|controller| std::ptr::eq::<UIViewController>(&*controller, showing))
+    });
+    crate::bottom_bar::hidden_through(&hides, shown)
 }
 
 /// Slides the app's system tab bars out (`hiding`) or back in, in the
@@ -2290,7 +2314,7 @@ pub(crate) fn slide_bottom_bar(nav: &UINavigationController, hiding: bool) {
     // frame on every pass, so a transform set from here would be undone by
     // the next one whenever a screen below it changes size.
     let bars = Rc::new(bars);
-    let apply = Rc::new(move || {
+    let apply = Rc::new(move |hiding: bool| {
         // A retained tab may have been hidden since the coordinator queued us.
         if view.window().is_none() || !ancestors_visible(&view) {
             return;
@@ -2304,21 +2328,33 @@ pub(crate) fn slide_bottom_bar(nav: &UINavigationController, hiding: bool) {
             }
         }
     });
-    let apply = apply.clone();
     match nav.transitionCoordinator() {
         Some(coordinator) => {
+            let along = apply.clone();
             let block = RcBlock::new(
                 move |_context: NonNull<
                     ProtocolObject<dyn UIViewControllerTransitionCoordinatorContext>,
                 >| {
-                    apply();
+                    along(hiding);
                 },
             );
-            coordinator.animateAlongsideTransition_completion(Some(&block), None);
+            // A coordinator still answers once its animations have run (as
+            // in `didShow`), and takes the block without ever running it:
+            // when the transition ends, the bar goes where the stack then
+            // says, which the animation has already done if it ran.
+            let nav = nav.retain();
+            let done = RcBlock::new(
+                move |_context: NonNull<
+                    ProtocolObject<dyn UIViewControllerTransitionCoordinatorContext>,
+                >| {
+                    apply(bottom_bar_hidden(&nav));
+                },
+            );
+            coordinator.animateAlongsideTransition_completion(Some(&block), Some(&done));
         }
         // Not in a transition (the first screen, a change with nothing to
         // animate): place it at once.
-        None => apply(),
+        None => apply(hiding),
     }
 }
 

@@ -23,9 +23,32 @@ impl Visibility {
     }
 }
 
+/// Whether a stack whose screens ask `hides` for the bar off screen (the
+/// root first) keeps it there while the screen at `shown` is the one on
+/// screen: UIKit's rule counts that screen and those below it. Screens above
+/// it are leaving — `navigationController:willShowViewController:animated:`
+/// can still list them for a pop — and do not count; `None` counts them all.
+pub(crate) fn hidden_through(hides: &[bool], shown: Option<usize>) -> bool {
+    let end = shown.map_or(hides.len(), |at| (at + 1).min(hides.len()));
+    hides[..end].iter().any(|hides| *hides)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Visibility;
+    use super::{Visibility, hidden_through};
+
+    #[test]
+    fn a_pop_counts_only_the_screens_up_to_the_one_shown() {
+        // A hiding page over a root that does not hide, popped while the
+        // stack still lists it.
+        assert!(!hidden_through(&[false, true], Some(0)));
+        assert!(hidden_through(&[false, true], Some(1)));
+        // A hiding screen below the one shown still keeps the bar away.
+        assert!(hidden_through(&[true, false], Some(1)));
+        // Not in the stack: every screen counts.
+        assert!(hidden_through(&[false, true], None));
+        assert!(!hidden_through(&[], None));
+    }
 
     #[test]
     fn pushes_and_pops_preserve_the_apps_hidden_prop() {
